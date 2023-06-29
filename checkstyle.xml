@@ -1,0 +1,173 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN" "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<module name="Checker">
+    <property name="charset" value="UTF-8" />
+    <property name="severity" value="warning" />
+
+    <property name="fileExtensions" value="java, properties, xml" />
+
+    <!-- See https://checkstyle.org/config_filefilters.html -->
+    <module name="BeforeExecutionExclusionFileFilter">
+        <property name="fileNamePattern" value="module\-info\.java$" />
+    </module>
+
+    <module name="FileTabCharacter">
+        <property name="eachLine" value="true" />
+    </module>
+    <module name="NewlineAtEndOfFile" />
+
+    <module name="FileLength">
+        <property name="max" value="1000" />
+    </module>
+    <module name="LineLength">
+        <property name="fileExtensions" value="java" />
+        <!-- 100 will still be visible unwrapped in small terminals, split windows or gitlab PR view -->
+        <property name="max" value="100" />
+        <property name="ignorePattern" value="^package.*|^import.*|a href|href|http://|https://|ftp://" />
+    </module>
+
+    <module name="TreeWalker">
+        <!-- ANNOTATION https://checkstyle.org/config_annotation.html -->
+        <module name="AnnotationLocation" />
+
+        <!-- BLOCKS https://checkstyle.org/config_blocks.html -->
+        <module name="EmptyBlock" />
+        <module name="EmptyCatchBlock" />
+        <module name="LeftCurly">
+            <property name="option" value="eol" />
+        </module>
+        <module name="NeedBraces" />
+        <module name="RightCurly">
+            <property name="option" value="same" />
+        </module>
+
+        <!-- CLASS DESIGN https://checkstyle.org/config_design.html -->
+        <module name="HideUtilityClassConstructor" />
+        <module name="MutableException" />
+        <module name="OneTopLevelClass" />
+
+        <!-- CODING https://checkstyle.org/config_coding.html -->
+        <module name="ArrayTrailingComma" />
+        <module name="DeclarationOrder" />
+        <module name="DefaultComesLast" />
+        <module name="EmptyStatement" />
+        <module name="EqualsAvoidNull" />
+        <module name="EqualsHashCode" />
+        <!-- Would be consistent, but may be very debatable -->
+        <!-- <module name="FinalLocalVariable"/> -->
+        <module name="HiddenField" />
+        <module name="IllegalThrows" />
+        <module name="IllegalType">
+            <property name="illegalClassNames" value="HashMap, HashSet, LinkedHashMap, LinkedHashSet, TreeMap, TreeSet, java.util.HashMap, java.util.HashSet, java.util.LinkedHashMap, java.util.LinkedHashSet, java.util.TreeMap, java.util.TreeSet, ArrayList, LinkedList, java.util.ArrayList, java.util.LinkedList" />
+        </module>
+        <module name="InnerAssignment" />
+        <module name="MissingSwitchDefault" />
+        <module name="ModifiedControlVariable" />
+        <module name="MultipleStringLiterals" />
+        <module name="MultipleVariableDeclarations" />
+        <module name="NestedIfDepth">
+            <property name="max" value="2" />
+        </module>
+        <module name="NestedTryDepth" />
+        <module name="NoFinalizer" />
+        <module name="OneStatementPerLine" />
+        <module name="OverloadMethodsDeclarationOrder" />
+        <module name="ParameterAssignment" />
+        <!-- Would make code more explicit, but may be very debatable -->
+        <!-- <module name="RequireThis"/> -->
+        <!-- Would make code flow more explicit, but may be very debatable -->
+        <!-- <module name="ReturnCount">
+            <property name="max" value="1"/>
+        </module>  -->
+        <module name="SimplifyBooleanExpression" />
+        <module name="SimplifyBooleanReturn" />
+        <module name="StringLiteralEquality" />
+        <module name="UnnecessaryParentheses" />
+        <module name="UnnecessarySemicolonAfterOuterTypeDeclaration" />
+        <module name="UnnecessarySemicolonAfterTypeMemberDeclaration" />
+        <module name="UnusedLocalVariable">
+            <property name="severity" value="error" />
+        </module>
+        <module name="VariableDeclarationUsageDistance" />
+
+        <!-- IMPORTS https://checkstyle.org/config_imports.html -->
+        <module name="RedundantImport" />
+        <module name="UnusedImports">
+            <property name="severity" value="error" />
+        </module>
+
+        <!-- JAVADOC https://checkstyle.org/config_javadoc.html -->
+        <module name="JavadocMethod">
+            <!-- Only enforce *some* Javadoc on public methods. At least a 'what does this method do' should be present -->
+            <property name="accessModifiers" value="public" />
+            <property name="allowMissingParamTags" value="true" />
+            <property name="allowMissingReturnTag" value="true" />
+        </module>
+        <module name="MissingJavadocMethod">
+            <property name="allowMissingPropertyJavadoc" value="true" />
+            <property name="tokens" value="METHOD_DEF" />
+        </module>
+        <module name="MissingJavadocType" />
+
+        <!-- METRICS https://checkstyle.org/config_metrics.html -->
+        <module name="BooleanExpressionComplexity" />
+        <module name="CyclomaticComplexity" />
+
+        <!-- MISC https://checkstyle.org/config_misc.html -->
+        <module name="Indentation">
+            <property name="basicOffset" value="2" />
+            <property name="caseIndent" value="2" />
+            <property name="throwsIndent" value="2" />
+            <property name="arrayInitIndent" value="2" />
+            <property name="lineWrappingIndentation" value="2" />
+        </module>
+        <module name="OuterTypeFilename" />
+
+        <!-- MODIFIER https://checkstyle.org/config_modifier.html -->
+        <module name="ModifierOrder" />
+
+        <!-- NAMING https://checkstyle.org/config_naming.html -->
+        <module name="AbbreviationAsWordInName" />
+        <module name="ConstantName" />
+        <module name="ClassTypeParameterName" />
+        <module name="RecordTypeParameterName" />
+        <module name="InterfaceTypeParameterName" />
+        <module name="MethodTypeParameterName" />
+        <module name="LambdaParameterName" />
+        <module name="LocalVariableName" />
+        <module name="MemberName" />
+        <module name="MethodName" />
+        <module name="PackageName" />
+        <module name="ParameterName" />
+        <module name="RecordComponentName" />
+        <module name="StaticVariableName" />
+        <module name="TypeName" />
+
+        <!-- SIZES https://checkstyle.org/config_sizes.html -->
+        <module name="MethodLength">
+            <property name="max" value="100" />
+            <property name="countEmpty" value="false" />
+        </module>
+        <module name="OuterTypeNumber" />
+
+
+        <!-- WHITESPACE https://checkstyle.org/config_whitespace.html -->
+        <module name="EmptyLineSeparator">
+            <property name="allowNoEmptyLineBetweenFields" value="true" />
+            <property name="allowMultipleEmptyLines" value="false" />
+            <property name="allowMultipleEmptyLinesInsideClassMembers" value="false" />
+        </module>
+        <module name="GenericWhitespace" />
+        <module name="MethodParamPad" />
+        <module name="NoLineWrap" />
+        <module name="NoWhitespaceAfter" />
+        <module name="NoWhitespaceBefore" />
+        <module name="NoWhitespaceBeforeCaseDefaultColon" />
+        <module name="ParenPad" />
+        <module name="SingleSpaceSeparator" />
+        <module name="TypecastParenPad" />
+        <module name="WhitespaceAfter" />
+        <module name="WhitespaceAround" />
+    </module>
+</module>

@@ -1,0 +1,2 @@
+mongock.enabled: false
+spring.cache.type: none

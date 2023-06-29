@@ -1,0 +1,1461 @@
+openapi: 3.0.0
+info:
+  version: '0.1'
+  title: 'Search profile rest-api specification'
+  description: 'Specification for the rest-api of the search-profile-service.'
+  termsOfService: 'http://example.com/terms/'
+  contact:
+    name: 'Example name'
+    url: 'https://example.com'
+    email: 'name@example.com'
+  license:
+    name: 'Apache 2.0 -- EXAMPLE'
+    url: 'https://www.apache.org/licenses/LICENSE-2.0.html -- EXAMPLE'
+servers:
+  - url: 'http://localhost:7080'
+    description: 'Localhost for local testing.'
+  - url: 'https://backend.<url>'
+    description: 'Production server.'
+  - url: 'https://backend.dev.<url>'
+    description: 'Development server'
+paths:
+  /api/v1/users/{userId}:
+    get:
+      summary: retrieve user
+      description: Retrieves an existing user for a given id
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/parameters/UserIdPathParam'
+      responses:
+        '200':
+          description: Successfully retrieved user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: Error when no user exists for given id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+    delete:
+      summary: delete user
+      description: Deletes an existing user for a given userId
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/parameters/UserIdPathParam'
+      responses:
+        '204':
+          description: User successfully deleted
+        '404':
+          description: Error when no user could be found for UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+    put:
+        summary: update user
+        description: Update an existing user for a given userId
+        tags:
+          - Users
+        parameters:
+          - $ref: '#/components/parameters/UserIdPathParam'
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPartial'
+        responses:
+          '200':
+            description: Returns updated user
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/User'
+          '404':
+            description: Error when no user exists for given id or when given id is not a valid UUID
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/ErrorDTO'
+          '400':
+            description: Error when given id is not a valid UUID or required fields of user object in request body are missing
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/ErrorDTO'
+  /api/v1/users/{userId}/activate:
+    put:
+      summary: updates account status for a given user
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/parameters/UserIdPathParam'
+        - name: activate
+          in: query
+          description: if set to true, the user is getting activated; if set to false, the user is getting deactivated
+          required: true
+          schema:
+            type: boolean
+            example: true
+      responses:
+        '200':
+          description: Returns updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '403':
+          description: You can't deactivate an admin!
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: No user found for given ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+  /api/v1/users:
+    get:
+      summary: list users
+      description: Lists all users. If the admin calls this endpoint, returns the full UserDTOs. Otherwise just the reduced Users
+      tags:
+        - Users
+      parameters:
+        - name: activated
+          in: query
+          description: if empty return all users, if false only not activated users, if true only activated users
+          required: false
+          schema:
+            type: boolean
+            example: true
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserList'
+
+  /api/v1/users/login/status:
+    get:
+      summary: Login status of the current user
+      description: Returns whether the current user is authenticated or not.
+      tags:
+        - Users
+      responses:
+        '200':
+          description: Status of the current user
+          content:
+            application/json:
+              schema:
+                type: object
+                description: The authentication status of the user
+                properties:
+                  authenticated:
+                    type: boolean
+                  userId:
+                    type: string
+                  userName:
+                    type: string
+                  pictureLink:
+                    type: string
+                  admin:
+                    type: boolean
+                  activated:
+                    type: boolean
+      security: []
+  /api/v1/users/elasticsearch:
+    post:
+      summary: Create a new ElasticSearch User
+      description: Create a new ElasticSearch User in the linked ElasticSearch engine
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ElasticSearchUser'
+      responses:
+        '201':
+          description: returns User
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElasticSearchUser'
+        '400':
+          description: Password does not fulfill the minimum requirements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+  /api/v1/searchprofiles:
+    get:
+      summary: Return a list of search profiles w/ only their basic fields
+      description: Get a list of all search profiles in the system.
+      tags:
+        - search-profiles
+      responses:
+        '200':
+          description: list of search profiles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchProfileBasicDtoList'
+    post:
+      summary: Creates new search profile
+      description: Creates a new search profile in the database, if the current user created the app or is allowed to use it
+      tags:
+        - search-profiles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchProfileDtoPost'
+      responses:
+        '201':
+          description: Successfully created search profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchProfileDto'
+        '400':
+          description: Given request-body was not valid or application is not active
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '401':
+          description: Current user is not authorized to create a search profile for this application
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: No corresponding application found for given application id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+  /api/v1/searchprofiles/{profileId}:
+    get:
+      summary: Get search profile by search profile id
+      description: Get a search profile by the specified search profile id
+      tags:
+        - search-profiles
+      parameters:
+        - $ref: '#/components/parameters/ProfileIdPathParam'
+      responses:
+        '200':
+          description: Search profile for the specified profile id was returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchProfileDto'
+        '400':
+          description: Error when given id is not a valid UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: Given profileId does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+    put:
+      summary: Updates existing search profile
+      description: > 
+        Updates an existing search profile in the database, if the current user created the app or is allowed to use it.<br>
+        Note that the `creatorId` and `lastEditorId` in the request body are actually 64-bit integers but are presented as strings.
+      tags:
+        - search-profiles
+      parameters:
+        - $ref: '#/components/parameters/ProfileIdPathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchProfileDtoPut'
+      responses:
+        '200':
+          description: Returns search profile with new lastModifiedDate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchProfileDto'
+        '400':
+          description: Given request-body was not valid or given id is not a valid UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '401':
+          description: Current user is not authorized to update a search profile for the corresponding application
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: Given profileId or applicationId does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+    delete:
+      summary: Deletes search profile with given profile id
+      description: Deletes search profile by given profile id.
+      tags:
+        - search-profiles
+      parameters:
+        - $ref: '#/components/parameters/ProfileIdPathParam'
+      responses:
+        '204':
+          description: Search profile was successfully deleted
+        '400':
+          description: Error when given profile id is not a valid UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '401':
+          description: Current user is not authorized to delete a search profile for the corresponding application
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: Error when no search profile could be found for the given profile id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+
+  /api/v1/applications:
+    get:
+      summary: List application profiles
+      description: Get a list of applications.
+      tags:
+        - Application
+      parameters:
+        - name: ownApplications
+          in: query
+          description: If true, only the applications which the user created are returned, if false, any application for which the user is approved will be returned
+          required: true
+          schema:
+            type: boolean
+            example: true
+      responses:
+        '200':
+          description: List of applications
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationList'
+    post:
+      summary: Create a new application
+      tags:
+        - Application
+      requestBody:
+        description: The data of the application to create
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationPartialCreation'
+      responses:
+        '201':
+          description: Application has successfully been created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationCreatedResponse'
+        '400':
+          description: The application-name is redundant or User-definable fields are empty/null or missing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+  /api/v1/applications/{applicationId}/documents:
+    post:
+      tags:
+        - Application
+      summary: Indexing Json Document to existing Application
+      requestBody:
+        description: The json data which will be indexed to an application
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+              format: Json
+      responses:
+        '201' :
+          content:
+            application/json:
+              schema:
+                  $ref: '#/components/schemas/DocumentCreateResult'
+          description: Successfully created document
+        '400':
+          description: Missing or invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '401':
+          description: Current user is not authorized to change the given application, because he is not the creator nor is he allowed to use it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+      parameters:
+        - in: path
+          name: applicationId
+          schema:
+            type: string
+            format: uuid
+          description: The id of the Application to insert the document into
+          required: true
+  /api/v1/applications/{applicationId}/documents/{documentId}:
+    put:
+      tags:
+        - Application
+        - Document
+      summary: Update Json Document in existing Application
+      requestBody:
+        description: The json data to update the document with
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                field1: value
+                field2: false
+      responses:
+        '204' :
+          description: Successfully updates document
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+          description: Bad request parameters
+        '401':
+          description: Current user is not authorized to change the given application, because he is not the creator nor is he allowed to use it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+      parameters:
+        - in: path
+          name: applicationId
+          schema:
+            type: string
+            format: uuid
+          description: The id of the application which owns the document that will be updated
+          required: true
+        - in: path
+          name: documentId
+          schema:
+            type: string
+            format: ElasticSearch Document ID
+          description: The id of document to update
+          required: true
+  /api/v1/applications/{applicationId}/documents/bulk-upload:
+    post:
+      tags:
+        - Application
+        - Document
+      summary: Bulk Upload Json Documents to existing Application
+      requestBody:
+        description: Json Document which contains Json Documents which are going to be bulk uploaded to existing Elastic Search Index
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+              format: Json
+              example: '{"Documents" : [{rawJson1}, {rawJson2}, ... ]}'
+      responses:
+        '201':
+          description: UUIDs from successful uploaded Documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  format: UUID
+        '400':
+          description: Failed Bulk-Upload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '401':
+          description: Current user is not authorized to change the given application, because he is not the creator nor is he allowed to use it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+      parameters:
+        - in: path
+          name: applicationId
+          schema:
+            type: string
+            format: uuid
+          description: The id of the Application to insert the document into
+          required: true
+  /api/v1/applications/{applicationId}/apikeys:
+    post:
+      tags:
+        - Application
+      summary: Create a new ApiKey for an existing Application
+      parameters:
+        - in: path
+          name: applicationId
+          schema:
+            type: string
+            format: uuid
+          description: The id of the Application to add the ApiKey to
+          required: true
+      requestBody:
+        description: The name of the new ApiKey
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+      responses:
+        '201' :
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyCreatedResponse'
+          description: Successfully created ApiKey
+        '400':
+          description: Missing or invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '401':
+          description: Current user is not authorized to change the given application, because he is not the creator nor is he allowed to use it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+  /api/v1/applications/{applicationId}/apikeys/{apiKeyId}:
+    delete:
+      tags:
+        - Application
+      summary: Delete an existing ApiKey from a given Application
+      parameters:
+        - in: path
+          name: applicationId
+          schema:
+            type: string
+            format: uuid
+          description: The id of the Application to remove the ApiKey from
+          required: true
+        - in: path
+          name: apiKeyId
+          schema:
+            type: string
+            format: uuid
+          description: The id of the ApiKey to be removed
+          required: true
+      responses:
+        '204':
+          description: ApiKey was successfully deleted
+        '400':
+          description: Missing or invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '401':
+          description: Current user is not authorized to change the given application, because he is not the creator nor is he allowed to use it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+  /api/v1/applications/{id}:
+    get:
+      summary: Retrieve an existing application
+      tags:
+        - Application
+      responses:
+        '200':
+          description: Successfully retrieved the application
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '400':
+          description: Error when given id is not a valid UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: Error when no application exists for given id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+    put:
+      summary: Updates an existing application
+      tags:
+        - Application
+      requestBody:
+        description: The data of the application to update (when AllowedUserIds is left empty it overrides the existing AllowedUserIds and defaults to an empty List)
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationPartialUpdate'
+      responses:
+        '200':
+          description: Returns updated application
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '400':
+          description: Error when given id is not a valid UUID or required fields of application object in the request body are missing or userIds are invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '401':
+          description: Current user is not authorized to change the given application, because he is not the creator nor is he allowed to use it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: Error when no application exists for given id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+    delete:
+      summary: Delete an existing application
+      tags:
+        - Application
+      responses:
+        '204':
+          description: Application was successfully deleted
+        '400':
+          description: Error when given id is not a valid UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '401':
+          description: Current user is not authorized to change the given application, because he is not the creator nor is he allowed to use it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: Error when no application exists for given id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '500':
+          description: Error when corresponding elastic search index can not be deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+    parameters:
+    - name: id
+      in: path
+      description: ID of application to operate on
+      required: true
+      schema:
+        type: string
+        format: uuid
+  /api/v1/applications/{applicationId}/searchprofiles:
+    get:
+      summary: return a list of search profiles with given application id
+      description: Get a list of all search profiles with the given application id in the system.
+      tags:
+        - Application
+      parameters:
+        - $ref: '#/components/parameters/ApplicationIdPathParam'
+      responses:
+        '200':
+          description: List of search profiles with given application id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchProfileBasicDtoList'
+          '400':
+            description: The given id is not a valid uuid.
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/ErrorDTO'
+          '404':
+            description: There is no application for given application id
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/ErrorDTO'
+  /api/v1/applications/{id}/mapping:
+    get:
+      summary: Returns the mapping of the specified application
+      description: Returns the mapping of the index of the specified application
+      tags:
+        - Application
+      parameters:
+        - name: id
+          in: path
+          description: id of application
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Returns the mapping for the application index.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexMappingMap'
+        '400':
+          description: The given id is not a valid uuid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: The application index does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+  /api/v1/search/{profileId}:
+    get:
+      summary: Returns the results of the query request from given search profile.
+      description: Takes a profileId and returns the results of the request, which is created from the profile.
+      tags:
+        - Search
+      parameters:
+        - name: profileId
+          in: path
+          description: id of profile
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: value
+          in: query
+          description: Value to search for
+          required: true
+          schema:
+            type: string
+            example: Kommanditgesellschaft
+      responses:
+        '200':
+          description: Returns the results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResults'
+        '400':
+          description: The search value is null or empty or given id is not a valid UUID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: The profile id does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+  /api/v1/search/{profileId}/query:
+    get:
+      summary: Returns the Query from given search profile.
+      description: Takes a profileId and returns the corresponding query.
+      tags:
+        - Search
+      parameters:
+        - name: profileId
+          in: path
+          description: id of profile
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Returns the query.
+          content: 
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/Query'
+        '400':
+          description: The search value is null or empty or given id is not a valid UUID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: The profile id does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+  /api/v1/search/test:
+    post:
+      summary: Test endpoint for search profiles.
+      description: Takes given search profile and returns the results accordingly.
+      tags:
+        - Search
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchProfileDto'
+      parameters:
+        - name: value
+          in: query
+          description: Value to search for
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Returns Search Results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResults'
+        '400':
+          description: Given ApplicationID is not correct.
+        '403':
+          description: You are not allowed to use this application.
+        '404':
+          description: Application does not exist.
+
+  /api/v1/externalServices/query:
+    get:
+      summary: Returns query definition for given search-profile using an api key to authenticate
+      description: Get-endpoint query definition of a search-profile by taking a search-profileId
+      tags:
+        - ExternalServices
+      security: []
+      parameters:
+        - name: Application-Api-Key
+          in: header
+          description: api key of application
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: search-profileId
+          in: query
+          description: id of search-profile
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: returning the query definition of the requested search-profile was successful
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/Query'
+        '400':
+          description: Error when given search-profileId is not a valid UUID or searchValue is blank
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '403':
+          description: Error when given api key is blank or does not match api key of application the given search-profile belongs to
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: Error when no search profile or application could be found with given search-profile id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+  /api/v1/externalServices/queryResult:
+    get:
+      summary: Returns Results for given search-profile using an api key to authenticate
+      description: Get results of a search-profile by taking a profileId, a search value and a api key
+      tags:
+        - ExternalServices
+      security: [ ]
+      parameters:
+        - name: Application-Api-Key
+          in: header
+          description: api key of application, the search-profile belongs to
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: profileId
+          in: query
+          description: search-profile-Id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: searchValue
+          in: query
+          description: Value to search for
+          required: true
+          schema:
+            type: string
+            example: Aktien
+      responses:
+        '200':
+          description: Returns the results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResults'
+        '400':
+          description: Error when given profileId is not a valid UUID or searchValue is blank
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '403':
+          description: Error when given api key is blank or does not match api key of application the given search-profile belongs to
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: Error when no search-profile or application could be found with given search-profile id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+  /api/v1/externalServices/applications/{applicationId}/documents:
+    post:
+      tags:
+        - ExternalServices
+      summary: Indexing Json Document to existing Application
+      requestBody:
+        description: The json data which will be indexed to the provided application
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+              format: Json
+      security: []
+      parameters:
+        - name: Application-Api-Key
+          in: header
+          description: api key of the application
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: applicationId
+          in: path
+          description: The id of the Application to insert the document into
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201' :
+          description: Successfully uploaded document
+          content:
+            application/json:
+              schema:
+                  $ref: '#/components/schemas/DocumentCreateResult'
+        '400':
+          description: Missing or invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '403':
+          description: Given api key is blank or does not match api key of the provided application
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: No application could be found with given application-Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+  /api/v1/externalServices/applications/{applicationId}/documents/{documentId}:
+    put:
+      tags:
+        - ExternalServices
+      summary: Updates Json Document in existing Application
+      requestBody:
+        description: The json data to update the document with
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                field1: value
+                field2: false
+      security: []
+      parameters:
+        - in: header
+          name: Application-Api-Key
+          description: api key of application
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: applicationId
+          schema:
+            type: string
+            format: uuid
+          description: The id of the application which the document that will be updated belongs to
+          required: true
+        - in: path
+          name: documentId
+          schema:
+            type: string
+            format: ElasticSearch Document ID
+          description: The id of document to update
+          required: true
+      responses:
+        '204' :
+          description: Successfully updated document
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+          description: Bad request parameters (f.e. given applicationId is not a valid uuid or given json is blank or not valid)
+        '403':
+          description: Error when given api key is blank or does not match api key of application
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: Error when no application could be found with given profile id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+  /api/v1/externalServices/applications/{applicationId}/documents/bulk-upload:
+    post:
+      tags:
+        - ExternalServices
+      summary: Bulk Upload Json Documents to an existing Application
+      requestBody:
+        description: Json Document which contains Json Documents which are going to be bulk uploaded to existing Elastic Search Index
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+              format: Json
+              example: '{"Documents" : [{rawJson1}, {rawJson2}, ... ]}'
+      security: []
+      parameters:
+        - in: header
+          name: Application-Api-Key
+          description: api key of application
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: applicationId
+          schema:
+            type: string
+            format: uuid
+          description: The id of the Application to insert the documents into
+          required: true
+      responses:
+        '201':
+          description: UUIDs from successful uploaded Documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+        '400':
+          description: Failed Bulk-Upload, if f.e. the given applicationId is not a valid uuid or if the given json is blank or not valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '403':
+          description: Error when given api key is blank or does not match api key of application
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+        '404':
+          description: Error when no application could be found with given application-Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDTO'
+
+components:
+  schemas:
+    SearchResults:
+      type: object
+      properties:
+        numberOfResults:
+          type: number
+        results:
+          type: object
+          $ref: '#/components/schemas/SearchResult'
+    SearchResult:
+      type: object
+      properties:
+        numberOfResults:
+          type: number
+          format: double
+        document:
+          type: object
+          example:   # Sample object
+            id: 10
+            title: Personalausweis
+            description: Personalausweis ausstellen lassen ist leicht.
+            highlight:
+              field-name: string
+              content: string
+    User:
+      type: object
+      description: A user
+      properties:
+        userId:
+          type: string
+        createdDate:
+          type: string
+          format: date-time
+        name:
+          type: string
+        pictureLink:
+          type: string
+        activated:
+          type: boolean
+        role:
+          type: string
+    ElasticSearchUser:
+      type: object
+      description: A ElasticSearch user
+      properties:
+        userName:
+          type: string
+        password:
+          type: string
+    UserList:
+      type: array
+      description: List of users
+      items:
+        $ref: '#/components/schemas/User'
+    ErrorDTO:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date-time
+        message:
+          type: string
+    UserPartial:
+      type: object
+      description: User-definable fields of an user object
+      properties:
+        name:
+          type: string
+    SearchProfileDto:
+      type: object
+      properties:
+        profileId:
+          type: string
+          format: uuid
+        applicationId:
+          type: string
+          format: uuid
+        creatorId:
+          type: string
+          example: "108118709"
+        lastEditorId:
+          type: string
+          example: "108118709"
+        name:
+          type: string
+          example: "TestProfile"
+        lastModifiedDate:
+          type: string
+          format: date-time
+        minScore:
+          type: number
+        queryable:
+            type: boolean
+        relativeScore:
+            type: number
+        analyser:
+          $ref: '#/components/schemas/Analyser'
+        searchFields:
+          $ref: '#/components/schemas/SearchFields'
+    SearchProfileDtoPost:
+      type: object
+      properties:
+        applicationId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "TestProfile"
+    SearchProfileDtoPut:
+      type: object
+      properties:
+        profileId:
+          type: string
+          format: uuid
+        applicationId:
+          type: string
+          format: uuid
+        creatorId:
+          type: string
+          example: "108118709"
+        lastEditorId:
+          type: string
+          example: "108118709"
+        name:
+          type: string
+          example: "TestProfile"
+        minScore:
+          type: number
+        analyser:
+          $ref: '#/components/schemas/Analyser'
+        searchFields:
+          $ref: '#/components/schemas/SearchFields'
+    Analyser:
+      type: object
+      properties:
+        faultTolerant:
+          type: boolean
+        partialWordSearch:
+          type: boolean
+    SearchField:
+      type: object
+      properties:
+        fieldName:
+          type: string
+        enabled:
+          type: boolean
+        boost:
+          type: number
+          format: double
+    SearchFields:
+      type: array
+      description: List of search fields
+      items:
+        $ref: '#/components/schemas/SearchField'
+    SearchProfileDtoList:
+      type: array
+      description: List of search profile dummies.
+      items:
+        $ref: '#/components/schemas/SearchProfileDto'
+    SearchProfileIdDto:
+      type: object
+      properties:
+        profileId:
+          type: string
+          format: uuid
+      description: search profile id
+    SearchProfileBasicDtoList:
+      type: array
+      description: List of search profiles, containing only basic fields
+      items:
+        $ref: '#/components/schemas/SearchProfileBasicDto'
+    SearchProfileBasicDto:
+      type: object
+      properties:
+        profileId:
+          type: string
+          format: uuid
+        applicationId:
+          type: string
+          format: uuid
+        creatorId:
+          type: string
+          example: "108118709"
+        lastEditorId:
+          type: string
+          example: "108118709"
+        name:
+          type: string
+          example: TestProfile
+        lastModifiedDate:
+          type: string
+          format: date-time
+          example: 2023-01-16T10:41:48.797
+    Application:
+      type: object
+      description: A third-party application registered as client
+      properties:
+        id:
+          type: string
+          format: uuid
+        reducedApiKeys:
+          type: array
+          items:
+            $ref: '#components/schemas/ApiKeyDto'
+        name:
+          type: string
+        creatorId:
+          type: string
+          example: "108118709"
+        active:
+          type: boolean
+        allowedUserIds:
+          type: array
+          example: ["userId1", "userId2"]
+        numberOfDocuments:
+          type: integer
+          example: 2
+    ApplicationPartialCreation:
+      type: object
+      description: a reduced Application for Post-endpoint
+      properties:
+        name:
+          type: string
+    ApplicationPartialUpdate:
+      type: object
+      description: a reduced Application with everything a user can change using the update endpoint
+      properties:
+        name:
+          type: string
+        allowedUserIds:
+          type: array
+          example: ["userId1", "userId2"]
+    ApplicationList:
+      type: array
+      description: List of applications
+      items:
+        $ref: '#/components/schemas/Application'
+    ApplicationCreatedResponse:
+      type: object
+      description: the clear text api key and the corresponding api key dto
+      properties:
+        clearTextApiKey:
+          type: string
+          format: uuid
+        applicationDto:
+          type: object
+          $ref: '#/components/schemas/Application'
+    ApiKeyCreatedResponse:
+      type: object
+      description: the clear text api key and the corresponding api key dto
+      properties:
+        clearTextApiKey:
+          type: string
+          format: uuid
+        apiKey:
+          $ref: '#/components/schemas/ApiKeyDto'
+    ApiKeyDto:
+      type: object
+      description: an api key object not including the key itself
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+    IndexMappingMap:
+      type: object
+      description: The flattened identifier (from json) for the key.
+      additionalProperties:
+        type: string
+        description: The type mapping for the key.
+        enum:
+          - TEXT
+          - NOT_SUPPORTED
+      example:
+        id: NOT_SUPPORTED
+        description: TEXT
+        person.name: TEXT
+        person.age: NOT_SUPPORTED
+    DocumentCreateResult:
+      type: object
+      description: Return value when creating elastic search documents
+      properties:
+        data:
+          type: object
+          properties:
+            documentId:
+              type: string
+              format: ElasticSearch Document ID
+    Query:
+      type: string
+      example: {"query":{"bool":{"must":[],"should":[{"multi_match":{"fields":["name^1.0"],"query":"Aktien","type":"most_fields"}}]}}}
+  parameters:
+    ProfileIdPathParam:
+      name: profileId
+      in: path
+      description: id of search profile
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ApplicationIdPathParam:
+      name: applicationId
+      in: path
+      description: id of application
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UserIdPathParam:
+      name: userId
+      in: path
+      description: id of user
+      required: true
+      schema:
+        type: string
+
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      description: OAuth2 via Github.com
+      flows:
+        authorizationCode:
+          authorizationUrl: /oauth2/authorization/github
+          tokenURL:
+          scopes: {}
+security:
+  - OAuth2: []
+

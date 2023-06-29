@@ -1,0 +1,8 @@
+# use same elasticsearch image (8.2.2) as before and add two files
+FROM docker.elastic.co/elasticsearch/elasticsearch:8.2.2
+
+RUN mkdir -p /usr/share/elasticsearch/config/hyphenation
+
+# copy two files necessary for hyphenation
+COPY src/main/resources/elasticsearch/de_DR.xml ./config/hyphenation
+COPY src/main/resources/elasticsearch/dictionary-de.txt ./config/hyphenation

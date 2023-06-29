@@ -1,0 +1,9 @@
+elasticsearch:
+  connection:
+    # At the end the port will be set via DynamicPropertySource, because this application profile
+    # should always be used in conjunction with an elastic search test container.
+    port: 9200
+    host: localhost
+    ssl: false
+    username: elastic
+    password: elasticpassword

@@ -1,0 +1,202 @@
+stages:
+  - test
+  - build
+  - deploy-traefik
+  - deploy-develop
+  - retag
+  - deploy-production
+
+#variables:
+#  DOCKER_HOST: tcp://docker:2375/
+#  DOCKER_DRIVER: overlay2
+#  DOCKER_TLS_CERTDIR: ''
+
+test:develop:
+  stage: test
+  image: openjdk:17-alpine3.14
+  script:
+    - ./mvnw clean verify -Dtest=\!*ContainerizedTest # run tests but not tests containing "ContainerizedTest"
+  only:
+    - pushes # tests are executed if someone pushes to gitlab
+    - main
+
+build:develop:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY # login to the docker account which is used to push docker images to DockerHub
+  # Default branch leaves tag empty (= latest tag)
+  script:
+    - docker build --pull -t "$CI_REGISTRY_IMAGE" -f ./Dockerfile . # build a new docker image
+    - docker build --pull -t "$CI_REGISTRY_IMAGE_ELASTICSEARCH" -f ./Dockerfile-elasticsearch . # build a new elasticsearch docker image with two files for german hyphenation    
+    - docker push "$CI_REGISTRY_IMAGE" # push retaged image to DockerHub
+    - docker push "$CI_REGISTRY_IMAGE_ELASTICSEARCH" # push retaged image to DockerHub
+  # Run this job in a branch where a Dockerfile exists
+  only:
+    - main
+  needs: ["test:develop"]
+
+deploy:traefik:
+  stage: deploy-traefik
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client curl # install openssh-client, curl and sed
+    - eval $(ssh-agent -s) # set some ssh variables
+    - ssh-add <(echo "$SSH_PRIVATE_KEY" | tr -d '\r') # add the ssh private key
+  script:
+    - curl --header "PRIVATE-TOKEN:$PRIVATE_ACCESS_TOKEN" "$CI_API_V4_URL/projects/$PROJECT_ID/repository/files/config/traefik/docker-compose.yml/raw?ref=main" > docker-compose.yml # download docker-compose.yml of production deployment repository
+    - curl --header "PRIVATE-TOKEN:$PRIVATE_ACCESS_TOKEN" "$CI_API_V4_URL/projects/$PROJECT_ID/repository/files/config/traefik/.env/raw?ref=main" > .env # download .env of production deployment repository
+    - curl --header "PRIVATE-TOKEN:$PRIVATE_ACCESS_TOKEN" "$CI_API_V4_URL/projects/$PROJECT_ID/repository/files/config/traefik/traefik-dynamic.yml/raw?ref=main" > traefik-dynamic.yml # download traefik-dynamic.yml of production deployment repository
+    - sed -i -e "s/<ACME_MAIL>/$ACME_MAIL/" -e "s/<DOMAIN>/$DOMAIN/" .env # replaces the <GITHUB_CLIENT_*> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s/<DNS_PROVIDER>/$DNS_PROVIDER/" -e "s/<DNS_RESOLVERS>/$DNS_RESOLVERS/" -e "s/<CERT_RESOLVER>/$CERT_RESOLVER/" .env # replaces the <GITHUB_CLIENT_*> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s/<CF_API_EMAIL>/$CF_API_EMAIL/" -e "s/<CF_API_KEY>/$CF_API_KEY/" .env # replaces the <GITHUB_CLIENT_*> spaceholder with credentials defined in the CI/CD variables
+    - scp -P $SSH_PORT -o StrictHostKeyChecking=no -o LogLevel=ERROR ./docker-compose.yml ./.env ./traefik-dynamic.yml $SSH_USER@$SSH_HOST:/home/$SSH_USER/traefik/ # upload docker-compose.yml and .env_develop to the server
+    - ssh -p $SSH_PORT -o StrictHostKeyChecking=no -o LogLevel=ERROR $SSH_USER@$SSH_HOST "source /etc/profile && cd /home/$SSH_USER/traefik/ && docker compose down && docker compose up -d --remove-orphans" # ssh to the server and start the service
+  environment:
+    name: traefik
+    on_stop: stop:deploy:traefik
+  when: manual
+
+stop:deploy:traefik:
+  stage: deploy-traefik
+  image: alpine:latest
+  variables:
+    GIT_STRATEGY: none
+  before_script:
+    - apk add --no-cache openssh-client # install openssh-client
+    - eval $(ssh-agent -s) # set some ssh variables
+    - ssh-add <(echo "$SSH_PRIVATE_KEY" | tr -d '\r') # add the ssh private key
+  script:
+    - ssh -p $SSH_PORT -o StrictHostKeyChecking=no -o LogLevel=ERROR $SSH_USER@$SSH_HOST "source /etc/profile && cd /home/$SSH_USER/traefik/ && docker compose down --remove-orphans" # ssh to the server and stop the service
+  environment:
+    name: traefik
+    action: stop
+  when: manual
+
+deploy:develop:
+  stage: deploy-develop
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client curl sed # install openssh-client, curl and sed
+    - eval $(ssh-agent -s) # set some ssh variables
+    - ssh-add <(echo "$SSH_PRIVATE_KEY" | tr -d '\r') # add the ssh private key
+  script:
+    - curl --header "PRIVATE-TOKEN:$PRIVATE_ACCESS_TOKEN" "$CI_API_V4_URL/projects/$PROJECT_ID/repository/files/docker-compose.yml/raw?ref=main" > docker-compose.yml # download docker-compose.yml of production deployment repository
+    - curl --header "PRIVATE-TOKEN:$PRIVATE_ACCESS_TOKEN" "$CI_API_V4_URL/projects/$PROJECT_ID/repository/files/.env_develop/raw?ref=main" > .env_develop # download .env_develop of production deployment repository
+    - sed -i -e "s/<ELASTICSEARCH_PASSWORD>/$ELASTICSEARCH_PASSWORD_DEVELOP/" .env_develop # replaces the <MONGODB_AUTHENTICATION_DB> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s/<MONGODB_AUTHENTICATION_DB>/$MONGODB_AUTHENTICATION_DB_DEVELOP/" .env_develop # replaces the <MONGODB_AUTHENTICATION_DB> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s/<MONGO_INITDB_ROOT_USERNAME>/$MONGO_INITDB_ROOT_USERNAME_DEVELOP/" -e "s/<MONGO_INITDB_ROOT_PASSWORD>/$MONGO_INITDB_ROOT_PASSWORD_DEVELOP/" .env_develop # replaces the <MONGO_INITDB_ROOT_*> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s/<MONGO_INITDB_READ_USERNAME>/$MONGO_INITDB_READ_USERNAME_DEVELOP/" -e "s/<MONGO_INITDB_READ_PASSWORD>/$MONGO_INITDB_READ_PASSWORD_DEVELOP/" .env_develop # replaces the <MONGO_INITDB_READ_*> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s/<MONGO_INITDB_dbOwner_USERNAME>/$MONGO_INITDB_dbOwner_USERNAME_DEVELOP/" -e "s/<MONGO_INITDB_dbOwner_PASSWORD>/$MONGO_INITDB_dbOwner_PASSWORD_DEVELOP/" .env_develop # replaces the <MONGO_INITDB_dbOwner_*> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s@<LOGIN_REDIRECT_FRONTEND>@$LOGIN_REDIRECT_FRONTEND_DEVELOP@" -e "s@<FRONTEND_URL_TO_BACKEND>@$FRONTEND_URL_TO_BACKEND_DEVELOP@" .env_develop # replaces the <LOGIN_REDIRECT_FRONTEND_DEVELOP> and <FRONTEND_URL_TO_BACKEND>  spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s@<FRONTEND_COOKIE_DOMAIN>@$FRONTEND_COOKIE_DOMAIN_DEVELOP@" .env_develop # replaces the <FRONTEND_COOKIE_DOMAIN> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s@<FRONTEND_DOMAIN>@$FRONTEND_DOMAIN_DEVELOP@" -e "s@<BACKEND_DOMAIN>@$BACKEND_DOMAIN_DEVELOP@" -e "s@<API_DOMAIN>@$API_DOMAIN_DEVELOP@" .env_develop # replaces the <FRONTEND_DOMAIN> and <BACKEND_DOMAIN> and <API_DOMAIN> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s@<API_REDIRECT_REGEX>@$API_REDIRECT_REGEX_DEVELOP@" -e "s@<API_REDIRECT_REPLACEMENT>@$API_REDIRECT_REPLACEMENT_DEVELOP@" .env_develop # replaces the <API_REDIRECT_REGEX> and <API_REDIRECT_REPLACEMENT>  spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s/<GITHUB_CLIENT_ID>/$GITHUB_CLIENT_ID_DEVELOP/" -e "s/<GITHUB_CLIENT_SECRET>/$GITHUB_CLIENT_SECRET_DEVELOP/" -e "s/<ADMIN_ID>/$ADMIN_ID_DEVELOP/" .env_develop # replaces the <GITHUB_CLIENT_*> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "0,/^    ports/s//#    ports/" -e "0,/^    ports/s//#    ports/" -e "0,/^      - \${BACKEND_PORT}/s//#      - \${BACKEND_PORT}/" -e "0,/^      - \${FRONTEND_PORT}/s//#      - \${FRONTEND_PORT}/" docker-compose.yml # comment out port mapping of search-profile-service and web-app-service to make it work with traefik
+    - scp -P $SSH_PORT -o StrictHostKeyChecking=no -o LogLevel=ERROR ./docker-compose.yml ./.env_develop $SSH_USER@$SSH_HOST:/home/$SSH_USER/$CI_ENVIRONMENT_NAME/ # upload docker-compose.yml and .env_develop to the server
+    - ssh -p $SSH_PORT -o StrictHostKeyChecking=no -o LogLevel=ERROR $SSH_USER@$SSH_HOST "source /etc/profile && cd /home/$SSH_USER/$CI_ENVIRONMENT_NAME/ && docker compose --env-file "./.env_develop" down && docker compose --env-file "./.env_develop" up -d --remove-orphans" # ssh to the server and start the service
+  environment:
+    name: develop
+    url: https://$FRONTEND_DOMAIN_DEVELOP
+    on_stop: stop:deploy:develop
+  only:
+    - main
+  needs: ["build:develop"]
+
+stop:deploy:develop:
+  stage: deploy-develop
+  image: alpine:latest
+  variables:
+    GIT_STRATEGY: none
+  before_script:
+    - apk add --no-cache openssh-client # install openssh-client
+    - eval $(ssh-agent -s) # set some ssh variables
+    - ssh-add <(echo "$SSH_PRIVATE_KEY" | tr -d '\r') # add the ssh private key
+  script:
+    - ssh -p $SSH_PORT -o StrictHostKeyChecking=no -o LogLevel=ERROR $SSH_USER@$SSH_HOST "source /etc/profile && cd /home/$SSH_USER/$CI_ENVIRONMENT_NAME/ && docker compose --env-file "./.env_develop" down --remove-orphans" # ssh to the server and stop the service
+  environment:
+    name: develop
+    url: https://$FRONTEND_DOMAIN_DEVELOP
+    action: stop
+  when: manual
+  only:
+    - main
+
+retag:production:
+  stage: retag
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - apk add --no-cache openssh-client curl sed # install openssh-client, curl and sed
+    - eval $(ssh-agent -s) # set some ssh variables
+    - ssh-add <(echo "$SSH_PRIVATE_KEY" | tr -d '\r') # add the ssh private key
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY # login to the docker account which is used to push docker images to DockerHub
+  script:
+    - curl --header "PRIVATE-TOKEN:$PRIVATE_ACCESS_TOKEN" "$CI_API_V4_URL/projects/$PROJECT_ID/repository/files/.env_production/raw?ref=main" > .env_production # download .env_production of production deployment repository
+    - docker pull $CI_REGISTRY_IMAGE # pull the latest image
+    - PRODUCTION_TAG=$(sed -n -e 's/IMAGE_TAG=\(.*$\)/\1/p' .env_production) # set a shell variable which stores the production tag which should be used
+    - docker tag $CI_REGISTRY_IMAGE $CI_REGISTRY_IMAGE:$PRODUCTION_TAG # retag the latest image to the defined production tag
+    - docker push $CI_REGISTRY_IMAGE:$PRODUCTION_TAG # push retaged image to DockerHub
+    - ssh -p $SSH_PORT -o StrictHostKeyChecking=no -o LogLevel=ERROR $SSH_USER@$SSH_HOST "source /etc/profile && cd /home/$SSH_USER/$CI_ENVIRONMENT_NAME/ && docker compose down && docker compose --env-file "./.env_production" up -d --remove-orphans" # ssh to the server and start the service
+  environment:
+    name: production
+    url: https://$DOMAIN
+  when: manual
+  only:
+    - main
+  needs: ["build:develop"]
+
+deploy:production:
+  stage: deploy-production
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client curl sed # install openssh-client, curl and sed
+    - eval $(ssh-agent -s) # set some ssh variables
+    - ssh-add <(echo "$SSH_PRIVATE_KEY" | tr -d '\r') # add the ssh private key
+  script:
+    - curl --header "PRIVATE-TOKEN:$PRIVATE_ACCESS_TOKEN" "$CI_API_V4_URL/projects/$PROJECT_ID/repository/files/docker-compose.yml/raw?ref=main" > docker-compose.yml # download docker-compose.yml of production deployment
+    - curl --header "PRIVATE-TOKEN:$PRIVATE_ACCESS_TOKEN" "$CI_API_V4_URL/projects/$PROJECT_ID/repository/files/.env_production/raw?ref=main" > .env_production # download .env_production of production deployment
+    - sed -i -e "s/<ELASTICSEARCH_PASSWORD>/$ELASTICSEARCH_PASSWORD_PRODUCTION/" .env_production # replaces the <MONGODB_AUTHENTICATION_DB> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s/<MONGODB_AUTHENTICATION_DB>/$MONGODB_AUTHENTICATION_DB_PRODUCTION/" .env_production # replaces the <MONGODB_AUTHENTICATION_DB> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s/<MONGO_INITDB_ROOT_USERNAME>/$MONGO_INITDB_ROOT_USERNAME_PRODUCTION/" -e "s/<MONGO_INITDB_ROOT_PASSWORD>/$MONGO_INITDB_ROOT_PASSWORD_PRODUCTION/" .env_production # replaces the <MONGO_INITDB_ROOT_*> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s/<MONGO_INITDB_READ_USERNAME>/$MONGO_INITDB_READ_USERNAME_PRODUCTION/" -e "s/<MONGO_INITDB_READ_PASSWORD>/$MONGO_INITDB_READ_PASSWORD_PRODUCTION/" .env_production # replaces the <MONGO_INITDB_READ_*> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s/<MONGO_INITDB_dbOwner_USERNAME>/$MONGO_INITDB_dbOwner_USERNAME_PRODUCTION/" -e "s/<MONGO_INITDB_dbOwner_PASSWORD>/$MONGO_INITDB_dbOwner_PASSWORD_PRODUCTION/" .env_production # replaces the <MONGO_INITDB_dbOwner_*> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s@<LOGIN_REDIRECT_FRONTEND>@$LOGIN_REDIRECT_FRONTEND_PRODUCTION@" -e "s@<FRONTEND_URL_TO_BACKEND>@$FRONTEND_URL_TO_BACKEND_PRODUCTION@" .env_production # replaces the <LOGIN_REDIRECT_FRONTEND_DEVELOP> and <FRONTEND_URL_TO_BACKEND> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s@<FRONTEND_DOMAIN>@$FRONTEND_DOMAIN_PRODUCTION@" -e "s@<BACKEND_DOMAIN>@$BACKEND_DOMAIN_PRODUCTION@" -e "s@<API_DOMAIN>@$API_DOMAIN_PRODUCTION@" .env_production # replaces the <FRONTEND_DOMAIN> and <BACKEND_DOMAIN> and <API_DOMAIN> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s@<FRONTEND_COOKIE_DOMAIN>@$FRONTEND_COOKIE_DOMAIN_PRODUCTION@" .env_production # replaces the <FRONTEND_COOKIE_DOMAIN> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s@<API_REDIRECT_REGEX>@$API_REDIRECT_REGEX_PRODUCTION@" -e "s@<API_REDIRECT_REPLACEMENT>@$API_REDIRECT_REPLACEMENT_PRODUCTION@" .env_production # replaces the <API_REDIRECT_REGEX> and <API_REDIRECT_REPLACEMENT>  spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "s/<GITHUB_CLIENT_ID>/$GITHUB_CLIENT_ID_PRODUCTION/" -e "s/<GITHUB_CLIENT_SECRET>/$GITHUB_CLIENT_SECRET_PRODUCTION/" -e "s/<ADMIN_ID>/$ADMIN_ID_PRODUCTION/" .env_production # replaces the <GITHUB_CLIENT_*> spaceholder with credentials defined in the CI/CD variables
+    - sed -i -e "0,/^    ports/s//#    ports/" -e "0,/^    ports/s//#    ports/" -e "0,/^      - \${BACKEND_PORT}/s//#      - \${BACKEND_PORT}/" -e "0,/^      - \${FRONTEND_PORT}/s//#      - \${FRONTEND_PORT}/" docker-compose.yml # comment out port mapping of search-profile-service and web-app-service to make it work with traefik
+    - scp -P $SSH_PORT -o StrictHostKeyChecking=no -o LogLevel=ERROR ./docker-compose.yml ./.env_production $SSH_USER@$SSH_HOST:/home/$SSH_USER/$CI_ENVIRONMENT_NAME/ # upload docker-compose.yml and .env_production to the server
+    - ssh -p $SSH_PORT -o StrictHostKeyChecking=no -o LogLevel=ERROR $SSH_USER@$SSH_HOST "source /etc/profile && cd /home/$SSH_USER/$CI_ENVIRONMENT_NAME/ && docker compose --env-file "./.env_production" down && docker compose --env-file "./.env_production" up -d --remove-orphans" # ssh to the server and start the service
+  environment:
+    name: production
+    url: https://$DOMAIN
+    on_stop: stop:deploy:production
+  when: manual
+  only:
+    - main
+  needs: ["retag:production"]
+
+stop:deploy:production:
+  stage: deploy-production
+  image: alpine:latest
+  variables:
+    GIT_STRATEGY: none
+  before_script:
+    - apk add --no-cache openssh-client # install openssh-client
+    - eval $(ssh-agent -s) # set some ssh variables
+    - ssh-add <(echo "$SSH_PRIVATE_KEY" | tr -d '\r') # add the ssh private key
+  script:
+    - ssh -p $SSH_PORT -o StrictHostKeyChecking=no -o LogLevel=ERROR $SSH_USER@$SSH_HOST "source /etc/profile && cd /home/$SSH_USER/$CI_ENVIRONMENT_NAME/ && docker compose --env-file "./.env_production" down --remove-orphans" # ssh to the server and stop the service
+  environment:
+    name: production
+    url: https://$DOMAIN
+    action: stop
+  when: manual
+  only:
+    - main

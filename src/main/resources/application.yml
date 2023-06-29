@@ -1,0 +1,61 @@
+server:
+  port: 7080
+
+springdoc:
+  swagger-ui:
+    url: /openapi.yml
+    path: /api/v1/doc
+    csrf:
+      enabled: true
+    oauth:
+      client-secret: "placeholder"
+      client-id: "placeholder"
+spring:
+  data:
+    mongodb:
+      host: '${MONGO_HOST:localhost}'
+      port: 27017
+      database: '${MONGO_DB:SearchProfileServiceDatabase}'
+      authentication-database: '${MONGODB_AUTHENTICATION_DB:admin}'
+      username: '${MONGODB_USERNAME:admin}'
+      password: '${MONGODB_PASSWORD:admin}'
+
+  security:
+    adminId: '${ADMIN_ID:83211042}'
+    oauth2:
+      client:
+        registration:
+          github:
+            clientId: ${GITHUB_CLIENT_ID:4e1aa26752944982bbe3}
+            clientSecret: ${GITHUB_CLIENT_SECRET:8f13433613ed29c3439dbd37662da6d2083fba4b}
+    redirect:
+      login:
+        frontend: '${LOGIN_REDIRECT_FRONTEND:http://localhost:8080/dashboard}'
+    frontend:
+      cookie:
+        domain: '${FRONTEND_COOKIE_DOMAIN:localhost}'
+
+logging:
+  pattern:
+    file: "%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n"
+  level:
+    root: warn
+  logback:
+    rollingpolicy:
+      file-name-pattern: "logs/archived/search_profile_service_logs-%d{yyyy-MM-dd}.%i.log"
+      clean-history-on-start: true
+      max-history: 3
+      max-file-size: 100KB
+  file:
+    name: logs/search_profile_services_logs.log
+
+elasticsearch:
+  connection:
+    port: ${ELASTICSEARCH_PORT:9200}
+    host: ${ELASTICSEARCH_HOST:localhost}
+    ssl: false
+    username: ${ELASTICSEARCH_USERNAME:elastic}
+    password: ${ELASTICSEARCH_PASSWORD:p@ssw0rd}
+
+mongock:
+  change-logs-scan-package: com.github.searchprofileservice    
